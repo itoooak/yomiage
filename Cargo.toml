@@ -1,0 +1,20 @@
+[package]
+name = "yomiage"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+actix-files = "0.7.0"
+actix-web = "4.15.0"
+anyhow = "1.0.104"
+askama = "0.16.0"
+askama_web = { version = "0.16.0", features = ["actix-web-4"] }
+blake3 = "1.8.7"
+hound = "3.5.1"
+reqwest = { version = "0.13.4", features = ["query"] }
+serde = { version = "1.0.229", features = ["derive"] }
+tokio = { version = "1.53.1", features = ["macros", "rt-multi-thread"] }
+toml = "1.1.4"
+tracing = "0.1.44"
+tracing-actix-web = "0.7.22"
+tracing-subscriber = { version = "0.3.23", features = ["env-filter"] }

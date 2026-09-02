@@ -1,0 +1,6 @@
+[voicevox]
+speaker = 3
+
+[[target]]
+id = "sample"
+input_path = "./sample.txt"
