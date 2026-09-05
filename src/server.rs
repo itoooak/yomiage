@@ -1,15 +1,16 @@
 use std::{io::ErrorKind, path::Path, sync::Arc};
 
-use actix_files::NamedFile;
-use actix_web::{App, HttpServer, Responder, error, web};
+use actix_files::{Files, NamedFile};
+use actix_web::{App, HttpResponse, HttpServer, Responder, error, web};
 use serde::Deserialize;
 use tracing_actix_web::TracingLogger;
 
-use crate::{config::Config, store::Store};
+use crate::{config::Config, progress::Progress, store::Store};
 
 struct ServerState {
     config: Arc<Config>,
-    store: Store,
+    store: Arc<Store>,
+    progress: Arc<Progress>,
 }
 
 #[derive(askama::Template, askama_web::WebTemplate)]
@@ -33,7 +34,7 @@ async fn index(state: web::Data<ServerState>) -> impl Responder {
 #[template(path = "player.html")]
 struct PlayerTemplate {
     id: String,
-    wav_hash: String,
+    wav_hash: Option<String>,
 }
 
 #[derive(Deserialize)]
@@ -47,22 +48,23 @@ async fn player(
     state: web::Data<ServerState>,
 ) -> actix_web::Result<PlayerTemplate> {
     let id = id.into_inner();
-    let target_state = state
-        .store
-        .load_state(&id)
-        .map_err(|error| {
-            tracing::error!(
-                target = %id,
-                error = %format_args!("{error:#}"),
-                "failed to load target state"
-            );
-            error::ErrorInternalServerError("failed to load target state")
-        })?
-        .ok_or_else(|| error::ErrorNotFound("audio not found"))?;
+    if !state.config.targets.iter().any(|target| target.id == id) {
+        return Err(error::ErrorNotFound("target not found"));
+    }
+    let target_state = state.store.load_state(&id).map_err(|error| {
+        tracing::error!(
+            target = %id,
+            error = %format_args!("{error:#}"),
+            "failed to load target state"
+        );
+        error::ErrorInternalServerError("failed to load target state")
+    })?;
 
     Ok(PlayerTemplate {
+        wav_hash: target_state
+            .filter(|target| state.store.wav_path(&id, &target.wav_hash).is_file())
+            .map(|target| target.wav_hash),
         id,
-        wav_hash: target_state.wav_hash,
     })
 }
 
@@ -110,17 +112,50 @@ async fn audio(
     })
 }
 
-pub(super) async fn run(config: Arc<Config>, store: Store) -> std::io::Result<()> {
+async fn progress(
+    id: web::Path<String>,
+    state: web::Data<ServerState>,
+) -> actix_web::Result<HttpResponse> {
+    if !state
+        .config
+        .targets
+        .iter()
+        .any(|target| target.id == id.as_str())
+    {
+        return Err(error::ErrorNotFound("target not found"));
+    }
+    let progress = state.progress.get(&id);
+    Ok(HttpResponse::Ok()
+        .insert_header(("Cache-Control", "no-store"))
+        .json(progress))
+}
+
+fn routes(config: &mut web::ServiceConfig) {
+    config
+        .route("/", web::get().to(index))
+        .route("/play/{id:[A-Za-z0-9_-]+}", web::get().to(player))
+        .route("/audio/{id:[A-Za-z0-9_-]+}.wav", web::get().to(audio))
+        .route("/progress/{id:[A-Za-z0-9_-]+}", web::get().to(progress))
+        .service(Files::new("/static", "./static"));
+}
+
+pub(super) async fn run(
+    config: Arc<Config>,
+    store: Arc<Store>,
+    progress: Arc<Progress>,
+) -> std::io::Result<()> {
     let bind_addr = config.bind_addr.clone();
-    let state = web::Data::new(ServerState { config, store });
+    let state = web::Data::new(ServerState {
+        config,
+        store,
+        progress,
+    });
 
     HttpServer::new(move || {
         App::new()
             .wrap(TracingLogger::default())
             .app_data(state.clone())
-            .route("/", web::get().to(index))
-            .route("/play/{id:[A-Za-z0-9_-]+}", web::get().to(player))
-            .route("/audio/{id:[A-Za-z0-9_-]+}.wav", web::get().to(audio))
+            .configure(routes)
     })
     .bind(bind_addr)?
     .run()

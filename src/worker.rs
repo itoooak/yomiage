@@ -5,20 +5,26 @@ use tokio::{task::JoinSet, time::sleep};
 use crate::{
     config::Config,
     converter::{ConversionStatus, Converter},
+    progress::Progress,
     store::Store,
 };
 
-pub(super) async fn run(config: Arc<Config>, store: Store) {
-    let converter = Arc::new(Converter::new(&config, store));
+pub(super) async fn run(config: Arc<Config>, store: Arc<Store>, progress: Arc<Progress>) {
+    let converter = Arc::new(Converter::new(
+        &config,
+        Arc::clone(&store),
+        Arc::clone(&progress),
+    ));
     let interval = Duration::from_secs(config.poll_interval_seconds);
     let mut tasks = JoinSet::new();
 
     for target_index in 0..config.targets.len() {
         tasks.spawn(run_target(
-            config.clone(),
+            Arc::clone(&config),
             target_index,
-            converter.clone(),
+            Arc::clone(&converter),
             interval,
+            Arc::clone(&progress),
         ));
     }
 
@@ -34,27 +40,21 @@ async fn run_target(
     target_index: usize,
     converter: Arc<Converter>,
     interval: Duration,
+    progress: Arc<Progress>,
 ) {
     loop {
         let target = &config.targets[target_index];
+        let previous = progress.start(&target.id);
 
         match converter.convert(target).await {
             Ok(ConversionStatus::Converted) => {
-                tracing::info!(target = %target.id, "updated WAV")
+                progress.completed(&target.id);
             }
             Ok(ConversionStatus::Unchanged) => {
-                tracing::info!(
-                    target = %target.id,
-                    reason = "unchanged",
-                    "skipped WAV update"
-                )
+                progress.unchanged(&target.id, previous);
             }
-            Err(error) => {
-                tracing::error!(
-                    target = %target.id,
-                    error = %format_args!("{error:#}"),
-                    "failed to update WAV"
-                )
+            Err(_) => {
+                progress.failed(&target.id);
             }
         }
 

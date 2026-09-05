@@ -16,6 +16,7 @@ RUN --mount=type=cache,target=/usr/local/cargo/registry \
 FROM gcr.io/distroless/cc-debian13:nonroot
 
 COPY --from=builder --chown=65532:65532 /yomiage /usr/local/bin/yomiage
+COPY --chown=65532:65532 static ./static
 
 EXPOSE 8080
 

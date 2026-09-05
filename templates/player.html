@@ -1,14 +1,18 @@
 <!doctype html>
-<html lang="ja">
+<html lang="en">
 <head>
   <meta charset="utf-8">
   <title>{{ id }}</title>
+  <script src="/static/progress.js" defer></script>
 </head>
 <body>
+  {% if let Some(hash) = wav_hash %}
   <audio
     controls
     preload="metadata"
-    src="/audio/{{ id }}.wav?hash={{ wav_hash }}"
+    src="/audio/{{ id }}.wav?hash={{ hash }}"
   ></audio>
+  {% endif %}
+  <p data-progress-id="{{ id }}" role="status"></p>
 </body>
 </html>

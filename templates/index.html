@@ -1,14 +1,35 @@
 <!doctype html>
-<html lang="ja">
+<html lang="en">
 <head>
   <meta charset="utf-8">
   <title>index</title>
+  <style>
+    table { border-collapse: collapse; }
+    th, td {
+      padding: 0.25rem 0.75rem;
+      text-align: left;
+      vertical-align: top;
+    }
+    th:first-child, td:first-child { padding-left: 0; }
+  </style>
+  <script src="/static/progress.js" defer></script>
 </head>
 <body>
-  <ul>
-    {% for id in targets %}
-      <li><a href="/play/{{ id }}">{{ id }}</a></li>
-    {% endfor %}
-  </ul>
+  <table>
+    <thead>
+      <tr>
+        <th scope="col">Target</th>
+        <th scope="col">Status</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for id in targets %}
+        <tr>
+          <td><a href="/play/{{ id }}">{{ id }}</a></td>
+          <td data-progress-id="{{ id }}"></td>
+        </tr>
+      {% endfor %}
+    </tbody>
+  </table>
 </body>
 </html>

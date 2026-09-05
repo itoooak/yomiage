@@ -18,7 +18,6 @@ pub(super) struct TargetState {
     pub(super) wav_hash: String,
 }
 
-#[derive(Clone)]
 pub(super) struct Store {
     wav_dir: PathBuf,
 }
